@@ -1,0 +1,23 @@
+[/]
+color-scheme='prefer-dark'
+cursor-blink=true
+cursor-blink-time=1200
+cursor-size=24
+cursor-theme='MacTahoe-light'
+document-font-name='SF Pro Text 10'
+enable-animations=true
+enable-hot-corners=true
+font-antialiasing='rgba'
+font-hinting='medium'
+font-name='SF Pro Display 10'
+gtk-enable-primary-paste=true
+gtk-im-module=''
+gtk-theme='MacTahoe-Dark-blue'
+icon-theme='MacTahoe-light'
+locate-pointer=true
+monospace-font-name='Noto Sans Mono  10'
+scaling-factor=uint32 1
+show-battery-percentage=true
+text-scaling-factor=1.0
+toolbar-style='text'
+toolkit-accessibility=false
