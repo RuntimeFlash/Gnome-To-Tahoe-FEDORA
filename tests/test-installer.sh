@@ -60,5 +60,6 @@ rg -q 'backup_current_state' setup.sh
 rg -q 'dconf load /org/gnome/shell/' setup.sh
 rg -q 'Could not enable' setup.sh
 rg -q 'shell-settings.dconf' setup.sh
+rg -q 'glib-compile-schemas' setup.sh
 rg -q 'BACKUP_LATEST_FILE' uninstall.sh
 printf 'PASS: installer safety checks\n'

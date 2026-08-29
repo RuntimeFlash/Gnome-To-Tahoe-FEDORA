@@ -353,6 +353,23 @@ EOF
 
 }
 
+compile_extension_schemas() {
+    local ext_uuid="$1"
+    local schemas_dir="${EXT_DEST_DIR}/${ext_uuid}/schemas"
+
+    [[ -d "${schemas_dir}" ]] || return
+    if ! find "${schemas_dir}" -maxdepth 1 -name '*.gschema.xml' -print -quit | grep -q .; then
+        return
+    fi
+    if ! command -v glib-compile-schemas >/dev/null 2>&1; then
+        log_warn "${ext_uuid} has schemas, but glib-compile-schemas is unavailable."
+        return
+    fi
+    if ! glib-compile-schemas "${schemas_dir}"; then
+        log_warn "Could not compile GSettings schemas for ${ext_uuid}."
+    fi
+}
+
 enable_extensions() {
     log_info "Activating GNOME extensions..."
     local enabled_count=0 failed_count=0 ext_uuid enable_error
@@ -366,6 +383,7 @@ enable_extensions() {
         ext_uuid="${ext_uuid//$'\r'/}"
         ext_uuid="${ext_uuid// /}"
         [[ -n "${ext_uuid}" ]] || continue
+        compile_extension_schemas "${ext_uuid}"
         if enable_error="$(gnome-extensions enable "${ext_uuid}" 2>&1)"; then
             ((enabled_count += 1))
         else

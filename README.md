@@ -44,7 +44,7 @@ After at least one successful setup run, use:
 ./uninstall.sh
 ```
 
-It asks for confirmation, preserves the current extension directory beside it for recovery, and restores the most recent pre-install snapshot. Log out and back in afterward.
+It asks for confirmation, deletes only extensions added by this project, restores files for extensions that were present before setup, and restores the most recent pre-install configuration. Unrelated extensions are left untouched. Log out and back in afterward.
 
 ## ✅ Test the Scripts
 

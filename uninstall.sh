@@ -51,15 +51,41 @@ if command -v gnome-extensions >/dev/null 2>&1; then
 fi
 
 if [[ -n "${snapshot}" ]]; then
-    # setup.sh snapshots the complete user extension directory. Replacing it is
-    # what makes restoration exact, including extensions absent from this repo.
-    if [[ -e "${EXT_DEST_DIR}" ]]; then
-        mv "${EXT_DEST_DIR}" "${EXT_DEST_DIR}.gnome-to-macos-removed-$(date +%Y%m%d%H%M%S)"
-        info "Saved the current extension directory beside the restored copy."
+    # Restore only project-managed extensions. Extensions installed after setup
+    # but unrelated to this project are left untouched.
+    managed_extensions=()
+    if [[ -f "${CONFIG_DIR}/extensions-list.txt" ]]; then
+        while IFS= read -r uuid || [[ -n "${uuid}" ]]; do
+            uuid="${uuid//$'\r'/}"
+            uuid="${uuid// /}"
+            [[ -n "${uuid}" ]] && managed_extensions+=("${uuid}")
+        done < "${CONFIG_DIR}/extensions-list.txt"
     fi
-    mkdir -p "$(dirname "${EXT_DEST_DIR}")"
-    cp -a "${snapshot}/extensions" "${EXT_DEST_DIR}"
+    managed_extensions+=("liquid-glass-v2@thinkingcoding1231.gmail.com")
 
+    for uuid in "${managed_extensions[@]}"; do
+        # UUIDs come from this repository; reject anything unsafe before acting.
+        [[ "${uuid}" != */ && "${uuid}" != .* ]] || die "Unsafe extension UUID in configuration: ${uuid}"
+        target="${EXT_DEST_DIR}/${uuid}"
+        previous="${snapshot}/extensions/${uuid}"
+        if [[ -e "${previous}" ]]; then
+            # This extension existed before setup: restore its prior files.
+            if [[ -e "${target}" ]]; then
+                mv "${target}" "${target}.gnome-to-macos-replaced-$(date +%Y%m%d%H%M%S)"
+            fi
+            mkdir -p "${EXT_DEST_DIR}"
+            cp -a "${previous}" "${target}"
+            info "Restored the previous ${uuid} extension files."
+        elif [[ -e "${target}" ]]; then
+            # This copy was introduced by setup, so remove it completely.
+            rm -rf -- "${target}"
+            info "Deleted newly installed ${uuid}."
+        fi
+    done
+
+    # Reset extension settings first so keys introduced by newly installed
+    # extensions are removed, then restore the pre-install configuration.
+    dconf reset -f /org/gnome/shell/extensions/
     dconf load /org/gnome/shell/extensions/ < "${snapshot}/extensions.dconf"
     dconf load /org/gnome/desktop/interface/ < "${snapshot}/interface-settings.dconf"
     dconf load /org/gnome/desktop/wm/ < "${snapshot}/wm-settings.dconf"
