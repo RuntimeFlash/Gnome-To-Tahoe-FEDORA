@@ -55,7 +55,7 @@ Run the safe test suite before installing:
 ./tests/test-setup-uninstall.sh
 ```
 
-The first checks shell syntax and verifies the live GNOME Extensions API lookup. The second runs setup's backup and uninstall's restore paths in a temporary fake GNOME profile. Neither uses `sudo`, installs packages, or modifies your real GNOME profile.
+The first checks shell syntax, verifies the live GNOME Extensions API lookup, and installs a test bundle through GNOME's CLI in a temporary HOME. The second runs setup's backup and uninstall's restore paths in a temporary fake GNOME profile. Neither uses `sudo`, installs packages, or modifies your real GNOME profile.
 
 ---
 

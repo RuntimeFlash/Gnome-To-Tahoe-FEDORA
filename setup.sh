@@ -17,9 +17,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="${SCRIPT_DIR}/Extensions-Configs"
 THEME_DIR="${SCRIPT_DIR}/Mactahoe-Theme"
-EXT_DEST_DIR="${HOME}/.local/share/gnome-shell/extensions"
+USER_DATA_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}"
+EXT_DEST_DIR="${USER_DATA_DIR}/gnome-shell/extensions"
 THEMES_DEST_DIR="${HOME}/.themes"
-LOCAL_THEMES_DEST_DIR="${HOME}/.local/share/themes"
+LOCAL_THEMES_DEST_DIR="${USER_DATA_DIR}/themes"
 BACKUP_ROOT="${XDG_STATE_HOME:-${HOME}/.local/state}/gnome-to-macos"
 BACKUP_LATEST_FILE="${BACKUP_ROOT}/latest"
 
@@ -309,25 +310,42 @@ for uuid in uuids:
         dl_url = urllib.parse.urljoin("https://extensions.gnome.org", ext_info["download_url"])
         with tempfile.TemporaryDirectory(prefix="gnome-extension-") as temp_dir:
             zip_path = os.path.join(temp_dir, "extension.zip")
-            extract_path = os.path.join(temp_dir, "extension")
             dl_req = urllib.request.Request(dl_url, headers=headers)
             with urllib.request.urlopen(dl_req, timeout=20) as dl_res, open(zip_path, "wb") as tmp_zip:
                 shutil.copyfileobj(dl_res, tmp_zip)
-            with zipfile.ZipFile(zip_path) as zip_ref:
-                zip_ref.extractall(extract_path)
 
-            # A valid package always contains metadata.json at its root.
-            metadata_path = os.path.join(extract_path, "metadata.json")
-            if not os.path.isfile(metadata_path):
-                raise RuntimeError("downloaded archive does not contain metadata.json")
-            with open(metadata_path, encoding="utf-8") as metadata_file:
-                if json.load(metadata_file).get("uuid") != uuid:
-                    raise RuntimeError("downloaded archive UUID does not match")
+            # Let GNOME Shell install the bundle. This compiles schemas where
+            # necessary and makes GNOME's extension registry authoritative.
+            installer = shutil.which("gnome-extensions")
+            if installer:
+                result = subprocess.run(
+                    [installer, "install", "--force", "--print-uuid", zip_path],
+                    text=True, capture_output=True,
+                )
+                if result.returncode:
+                    raise RuntimeError(result.stderr.strip() or "gnome-extensions install failed")
+            else:
+                # Fallback for minimal installations where the CLI is absent.
+                extract_path = os.path.join(temp_dir, "extension")
+                with zipfile.ZipFile(zip_path) as zip_ref:
+                    zip_ref.extractall(extract_path)
+                metadata_path = os.path.join(extract_path, "metadata.json")
+                if not os.path.isfile(metadata_path):
+                    raise RuntimeError("downloaded archive does not contain metadata.json")
+                with open(metadata_path, encoding="utf-8") as metadata_file:
+                    if json.load(metadata_file).get("uuid") != uuid:
+                        raise RuntimeError("downloaded archive UUID does not match")
+                os.makedirs(ext_dir, exist_ok=True)
+                shutil.move(extract_path, target_path)
 
-            # Do not leave a half-installed extension if extraction or validation fails.
-            os.makedirs(ext_dir, exist_ok=True)
-            shutil.move(extract_path, target_path)
-        print(f"   \033[38;2;163;190;140m✔\033[0m Successfully downloaded and installed: {uuid}")
+        # Do not report success merely because the HTTP request worked.
+        metadata_path = os.path.join(target_path, "metadata.json")
+        if not os.path.isfile(metadata_path):
+            raise RuntimeError("GNOME did not create the extension directory")
+        with open(metadata_path, encoding="utf-8") as metadata_file:
+            if json.load(metadata_file).get("uuid") != uuid:
+                raise RuntimeError("installed extension UUID does not match")
+        print(f"   \033[38;2;163;190;140m✔\033[0m Installed and verified: {uuid}")
     except Exception as e:
         print(f"   \033[38;2;235;203;139mℹ\033[0m Could not download {uuid}: {e}")
 EOF

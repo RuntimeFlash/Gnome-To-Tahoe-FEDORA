@@ -6,9 +6,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="${SCRIPT_DIR}/Extensions-Configs"
-EXT_DEST_DIR="${HOME}/.local/share/gnome-shell/extensions"
+USER_DATA_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}"
+EXT_DEST_DIR="${USER_DATA_DIR}/gnome-shell/extensions"
 THEMES_DEST_DIR="${HOME}/.themes"
-LOCAL_THEMES_DEST_DIR="${HOME}/.local/share/themes"
+LOCAL_THEMES_DEST_DIR="${USER_DATA_DIR}/themes"
 BACKUP_ROOT="${XDG_STATE_HOME:-${HOME}/.local/state}/gnome-to-macos"
 BACKUP_LATEST_FILE="${BACKUP_ROOT}/latest"
 
