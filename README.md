@@ -10,7 +10,6 @@ A calm, refined, and fully automated setup suite to transform your GNOME desktop
 - **MacTahoe Themes**: Deploys `MacTahoe-Dark-blue`, `MacTahoe-Dark-blue-hdpi`, and `MacTahoe-Dark-blue-xhdpi` to `~/.themes` and `~/.local/share/themes`.
 - **Liquid Glass V2**: Clones and installs the [Liquid Glass V2](https://github.com/RuntimeFlash/Liquid-Glass-V2.git) extension into `~/.local/share/gnome-shell/extensions/`.
 - **Full Extension & Preference Sync**: Automated dconf export/restore preserving your exact layout, dock, animations, blur, lockscreen, and shell tweaks.
-- **Calm & Beautiful CLI**: Gentle nord/pastel colored interface with step-by-step progress and interactive prompts.
 
 ---
 
