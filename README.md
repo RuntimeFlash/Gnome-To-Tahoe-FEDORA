@@ -10,6 +10,8 @@ A calm, refined, and fully automated setup suite to transform your GNOME desktop
 - **MacTahoe Themes**: Deploys `MacTahoe-Dark-blue`, `MacTahoe-Dark-blue-hdpi`, and `MacTahoe-Dark-blue-xhdpi` to `~/.themes` and `~/.local/share/themes`.
 - **Liquid Glass V2**: Clones and installs the [Liquid Glass V2](https://github.com/RuntimeFlash/Liquid-Glass-V2.git) extension into `~/.local/share/gnome-shell/extensions/`.
 - **Full Extension & Preference Sync**: Automated dconf export/restore preserving your exact layout, dock, animations, blur, lockscreen, and shell tweaks.
+- **Automatic Safety Snapshot**: Before applying changes, saves your user-installed extensions and GNOME settings under `~/.local/state/gnome-to-macos/`.
+- **Restorable Uninstall**: `uninstall.sh` removes this project's changes and restores the latest pre-install snapshot.
 
 ---
 
@@ -28,10 +30,32 @@ cd ~/Code/"Gnome To Macos"
 The script will:
 1. Safely request `sudo` credentials once for package installations.
 2. Install `gnome-tweaks`, `git`, and Extension Manager.
-3. Synchronize extension preferences.
-4. Clone and deploy **Liquid Glass V2** and other configured GNOME extensions.
-5. Deploy **MacTahoe** themes and apply styling.
-6. Open **GNOME Tweaks** for visual confirmation and offer a graceful session logout.
+3. Back up your current extensions and GNOME configuration.
+4. Synchronize extension preferences.
+5. Clone and deploy **Liquid Glass V2** and other configured GNOME extensions.
+6. Deploy **MacTahoe** themes and apply styling.
+7. Open **GNOME Tweaks** for visual confirmation and offer a graceful session logout.
+
+## ↩️ Uninstall and Restore
+
+After at least one successful setup run, use:
+
+```bash
+./uninstall.sh
+```
+
+It asks for confirmation, preserves the current extension directory beside it for recovery, and restores the most recent pre-install snapshot. Log out and back in afterward.
+
+## ✅ Test the Scripts
+
+Run the safe test suite before installing:
+
+```bash
+./tests/test-installer.sh
+./tests/test-setup-uninstall.sh
+```
+
+The first checks shell syntax and verifies the live GNOME Extensions API lookup. The second runs setup's backup and uninstall's restore paths in a temporary fake GNOME profile. Neither uses `sudo`, installs packages, or modifies your real GNOME profile.
 
 ---
 
@@ -52,7 +76,10 @@ This updates all files inside `Extensions-Configs/` so your repository stays in 
 ```text
 .
 ├── setup.sh                 # Master installation & transformation script
+├── uninstall.sh             # Restores the latest automatic pre-install snapshot
 ├── backup-configs.sh        # Quick exporter for GNOME & extension settings
+├── tests/test-installer.sh  # Safe syntax and extension API checks
+├── tests/test-setup-uninstall.sh # Isolated setup/uninstall integration test
 ├── Mactahoe-Theme/          # MacTahoe GTK & Shell themes (Standard, HDPI, XHDPI)
 │   ├── MacTahoe-Dark-blue
 │   ├── MacTahoe-Dark-blue-hdpi

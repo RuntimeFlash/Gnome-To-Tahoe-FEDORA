@@ -20,6 +20,8 @@ THEME_DIR="${SCRIPT_DIR}/Mactahoe-Theme"
 EXT_DEST_DIR="${HOME}/.local/share/gnome-shell/extensions"
 THEMES_DEST_DIR="${HOME}/.themes"
 LOCAL_THEMES_DEST_DIR="${HOME}/.local/share/themes"
+BACKUP_ROOT="${XDG_STATE_HOME:-${HOME}/.local/state}/gnome-to-macos"
+BACKUP_LATEST_FILE="${BACKUP_ROOT}/latest"
 
 # ==============================================================================
 #  Color Palette & Visual Formatting (Nord / Pastel Calm Aesthetics)
@@ -47,7 +49,7 @@ print_banner() {
 step_header() {
     local step_num="$1"
     local title="$2"
-    printf "\n  %s%s[%s/6]%s %s%s%s\n" "${COLOR_BOLD}" "${COLOR_PURPLE}" "${step_num}" "${COLOR_RESET}" "${COLOR_BOLD}" "${title}" "${COLOR_RESET}"
+    printf "\n  %s%s[%s/7]%s %s%s%s\n" "${COLOR_BOLD}" "${COLOR_PURPLE}" "${step_num}" "${COLOR_RESET}" "${COLOR_BOLD}" "${title}" "${COLOR_RESET}"
     printf "  %s%s%s\n" "${COLOR_DARK_BOX}" "──────────────────────────────────────────────────────────────────" "${COLOR_RESET}"
 }
 
@@ -119,7 +121,7 @@ install_system_packages() {
     sudo dnf install -y gnome-tweaks git
 
     log_info "Checking GNOME Extension Manager..."
-    if command -v extension-manager >/dev/null 2>&1 || flatpak list 2>/dev/null | grep -q "com.mattjakeman.ExtensionManager"; then
+    if command -v extension-manager >/dev/null 2>&1 || { command -v flatpak >/dev/null 2>&1 && flatpak list 2>/dev/null | grep -q "com.mattjakeman.ExtensionManager"; }; then
         log_success "Extension Manager is already installed."
     else
         log_info "Attempting to install Extension Manager via DNF..."
@@ -128,8 +130,11 @@ install_system_packages() {
         elif command -v flatpak >/dev/null 2>&1; then
             log_info "Installing Extension Manager via Flathub Flatpak..."
             flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
-            flatpak install -y flathub com.mattjakeman.ExtensionManager 2>/dev/null || true
-            log_success "Extension Manager installed via Flatpak."
+            if flatpak install -y flathub com.mattjakeman.ExtensionManager; then
+                log_success "Extension Manager installed via Flatpak."
+            else
+                log_warn "Extension Manager could not be installed via Flatpak. Continuing with the GNOME Extensions CLI."
+            fi
         else
             log_warn "Extension Manager package not found in repos; GNOME Tweaks and Extensions CLI will manage extensions."
         fi
@@ -137,47 +142,76 @@ install_system_packages() {
 }
 
 # ==============================================================================
-#  Step 2: Sync & Extract Configurations
+#  Step 2: Back Up Current Extensions & Settings
+# ==============================================================================
+backup_current_state() {
+    step_header "2" "Backing Up Current Extensions & GNOME Settings"
+
+    local backup_dir
+    umask 077
+    mkdir -p "${BACKUP_ROOT}"
+    backup_dir="$(mktemp -d "${BACKUP_ROOT}/backup-XXXXXXXX-XXXXXX")"
+
+    log_info "Saving a restorable snapshot to ${COLOR_MUTED}${backup_dir}${COLOR_RESET}..."
+    if [[ -d "${EXT_DEST_DIR}" ]]; then
+        cp -a "${EXT_DEST_DIR}" "${backup_dir}/extensions"
+    else
+        mkdir -p "${backup_dir}/extensions"
+    fi
+    dconf dump /org/gnome/shell/extensions/ > "${backup_dir}/extensions.dconf"
+    dconf dump /org/gnome/desktop/interface/ > "${backup_dir}/interface-settings.dconf"
+    dconf dump /org/gnome/desktop/wm/ > "${backup_dir}/wm-settings.dconf"
+    dconf dump /org/gnome/shell/ > "${backup_dir}/shell-settings.dconf"
+    gsettings get org.gnome.shell enabled-extensions > "${backup_dir}/enabled-extensions.txt"
+    printf '%s\n' "${backup_dir}" > "${BACKUP_LATEST_FILE}"
+    log_success "Backup complete. Run uninstall.sh later to restore this snapshot."
+}
+
+# ==============================================================================
+#  Step 3: Sync & Extract Configurations
 # ==============================================================================
 sync_configurations() {
-    step_header "2" "Synchronizing GNOME Extension & Desktop Configurations"
+    step_header "3" "Synchronizing GNOME Extension & Desktop Configurations"
 
     mkdir -p "${CONFIG_DIR}"
 
-    # If configs don't exist yet, extract them
-    if [[ ! -f "${CONFIG_DIR}/extensions.dconf" ]]; then
-        log_info "Extracting active GNOME configurations to ${COLOR_MUTED}Extensions-Configs/${COLOR_RESET}..."
-        dconf dump /org/gnome/shell/extensions/ > "${CONFIG_DIR}/extensions.dconf"
-        dconf dump /org/gnome/desktop/interface/ > "${CONFIG_DIR}/interface-settings.dconf"
-        dconf dump /org/gnome/desktop/wm/ > "${CONFIG_DIR}/wm-settings.dconf"
-        dconf dump /org/gnome/shell/ > "${CONFIG_DIR}/shell-settings.dconf"
-        gsettings get org.gnome.shell enabled-extensions > "${CONFIG_DIR}/enabled-extensions.txt"
-        log_success "Configurations successfully extracted."
-    else
+    local required_config configs_complete=true
+    for required_config in extensions.dconf interface-settings.dconf wm-settings.dconf shell-settings.dconf enabled-extensions.txt extensions-list.txt; do
+        [[ -f "${CONFIG_DIR}/${required_config}" ]] || configs_complete=false
+    done
+    if [[ "${configs_complete}" == true ]]; then
         log_success "Found pre-existing configurations in ${COLOR_MUTED}Extensions-Configs/${COLOR_RESET}"
+        return
     fi
+
+    log_warn "Configuration set is incomplete; creating only missing files from the current desktop."
+    [[ -f "${CONFIG_DIR}/extensions.dconf" ]] || dconf dump /org/gnome/shell/extensions/ > "${CONFIG_DIR}/extensions.dconf"
+    [[ -f "${CONFIG_DIR}/interface-settings.dconf" ]] || dconf dump /org/gnome/desktop/interface/ > "${CONFIG_DIR}/interface-settings.dconf"
+    [[ -f "${CONFIG_DIR}/wm-settings.dconf" ]] || dconf dump /org/gnome/desktop/wm/ > "${CONFIG_DIR}/wm-settings.dconf"
+    [[ -f "${CONFIG_DIR}/shell-settings.dconf" ]] || dconf dump /org/gnome/shell/ > "${CONFIG_DIR}/shell-settings.dconf"
+    [[ -f "${CONFIG_DIR}/enabled-extensions.txt" ]] || gsettings get org.gnome.shell enabled-extensions > "${CONFIG_DIR}/enabled-extensions.txt"
 
     # Format list for iterator
     if [[ -f "${CONFIG_DIR}/enabled-extensions.txt" && ! -f "${CONFIG_DIR}/extensions-list.txt" ]]; then
-        python3 -c "
+        CONFIG_FILE="${CONFIG_DIR}/enabled-extensions.txt" LIST_FILE="${CONFIG_DIR}/extensions-list.txt" python3 - <<'EOF'
 import ast
-try:
-    with open('${CONFIG_DIR}/enabled-extensions.txt') as f:
-        exts = ast.literal_eval(f.read().strip())
-    with open('${CONFIG_DIR}/extensions-list.txt', 'w') as out:
-        for ext in exts:
-            out.write(ext + '\n')
-except Exception:
-    pass
-" 2>/dev/null || true
+import os
+
+with open(os.environ['CONFIG_FILE'], encoding='utf-8') as source:
+    extensions = ast.literal_eval(source.read().strip())
+if not isinstance(extensions, list) or not all(isinstance(extension, str) for extension in extensions):
+    raise ValueError('enabled-extensions is not a list of extension UUIDs')
+with open(os.environ['LIST_FILE'], 'w', encoding='utf-8') as destination:
+    destination.write('\n'.join(extensions) + ('\n' if extensions else ''))
+EOF
     fi
 }
 
 # ==============================================================================
-#  Step 3: Deploy Liquid Glass V2 & GNOME Extensions
+#  Step 4: Deploy Liquid Glass V2 & GNOME Extensions
 # ==============================================================================
 install_extensions() {
-    step_header "3" "Deploying GNOME Extensions & Liquid Glass V2"
+    step_header "4" "Deploying GNOME Extensions & Liquid Glass V2"
 
     mkdir -p "${EXT_DEST_DIR}"
 
@@ -189,7 +223,9 @@ install_extensions() {
     if git clone --depth 1 "https://github.com/RuntimeFlash/Liquid-Glass-V2.git" "${temp_clone_dir}/Liquid-Glass-V2" 2>/dev/null; then
         local liquid_src="${temp_clone_dir}/Liquid-Glass-V2/liquid-glass-v2@thinkingcoding1231.gmail.com"
         if [[ -d "${liquid_src}" ]]; then
-            cp -r "${liquid_src}" "${EXT_DEST_DIR}/"
+            local liquid_dest="${EXT_DEST_DIR}/liquid-glass-v2@thinkingcoding1231.gmail.com"
+            rm -rf "${liquid_dest}"
+            cp -a "${liquid_src}" "${liquid_dest}"
             log_success "Liquid Glass V2 deployed to ${COLOR_MUTED}~/.local/share/gnome-shell/extensions/${COLOR_RESET}"
         else
             log_warn "Source folder not found inside cloned Liquid-Glass-V2 repository."
@@ -202,11 +238,20 @@ install_extensions() {
     # 2. Automated downloader & installer for listed extensions
     if [[ -f "${CONFIG_DIR}/extensions-list.txt" ]]; then
         log_info "Verifying and downloading extensions from GNOME Extensions repository..."
-        python3 - <<'EOF'
-import os, sys, json, urllib.request, zipfile, tempfile, shutil
+        CONFIG_FILE="${CONFIG_DIR}/extensions-list.txt" EXT_DIR="${EXT_DEST_DIR}" python3 - <<'EOF'
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import urllib.parse
+import urllib.request
+import zipfile
 
-ext_dir = os.path.expanduser("~/.local/share/gnome-shell/extensions")
-config_file = os.path.expanduser("Extensions-Configs/extensions-list.txt")
+ext_dir = os.environ["EXT_DIR"]
+config_file = os.environ["CONFIG_FILE"]
 
 if not os.path.isfile(config_file):
     sys.exit(0)
@@ -216,83 +261,136 @@ with open(config_file) as f:
 
 headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0'}
 
+def get_shell_version():
+    """Return the GNOME Shell major version required by extensions.gnome.org."""
+    try:
+        output = subprocess.check_output(
+            ["gnome-shell", "--version"], text=True, stderr=subprocess.DEVNULL
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+    match = re.search(r"(\d+)(?:\.\d+)*", output)
+    return match.group(1) if match else None
+
+shell_version = get_shell_version()
+if shell_version:
+    print(f"   Detected GNOME Shell {shell_version}; selecting compatible extension releases.")
+else:
+    print("   \033[38;2;235;203;139mℹ\033[0m Could not determine the GNOME Shell version; skipping repository downloads.")
+
 for uuid in uuids:
     target_path = os.path.join(ext_dir, uuid)
     if os.path.isdir(target_path) or os.path.islink(target_path):
         print(f"   \033[38;2;163;190;140m✔\033[0m Extension '{uuid}' is already present.")
         continue
     
+    if not shell_version:
+        continue
+
     print(f"   \033[38;2;136;192;208m✦\033[0m Querying GNOME repository for '{uuid}'...")
     try:
-        query_url = f"https://extensions.gnome.org/extension-query/?search={urllib.parse.quote(uuid)}"
-        req = urllib.request.Request(query_url, headers=headers)
+        # extension-info is an exact UUID lookup.  The shell_version parameter is
+        # essential: without it the API intentionally omits download_url.
+        info_url = (
+            "https://extensions.gnome.org/extension-info/?uuid="
+            f"{urllib.parse.quote(uuid)}&shell_version={urllib.parse.quote(shell_version)}"
+        )
+        req = urllib.request.Request(info_url, headers=headers)
         with urllib.request.urlopen(req, timeout=8) as res:
-            res_data = json.loads(res.read().decode())
-        
-        matches = [e for e in res_data.get('extensions', []) if e.get('uuid') == uuid]
-        if not matches and res_data.get('extensions'):
-            matches = [res_data['extensions'][0]]
-        
-        if matches:
-            ext_info = matches[0]
-            dl_url = f"https://extensions.gnome.org{ext_info['download_url']}"
-            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_zip:
-                dl_req = urllib.request.Request(dl_url, headers=headers)
-                with urllib.request.urlopen(dl_req, timeout=12) as dl_res:
-                    tmp_zip.write(dl_res.read())
-                tmp_zip_path = tmp_zip.name
+            ext_info = json.loads(res.read().decode())
 
-            os.makedirs(target_path, exist_ok=True)
-            with zipfile.ZipFile(tmp_zip_path, 'r') as zip_ref:
-                zip_ref.extractall(target_path)
-            os.remove(tmp_zip_path)
-            print(f"   \033[38;2;163;190;140m✔\033[0m Successfully downloaded and installed: {uuid}")
-        else:
-            print(f"   \033[38;2;235;203;139mℹ\033[0m Extension {uuid} will be activated if installed system-wide.")
+        if ext_info.get("uuid") != uuid:
+            raise RuntimeError("repository returned a different extension")
+        if not ext_info.get("download_url"):
+            print(f"   \033[38;2;235;203;139mℹ\033[0m No release of {uuid} supports GNOME Shell {shell_version}; skipped.")
+            continue
+
+        dl_url = urllib.parse.urljoin("https://extensions.gnome.org", ext_info["download_url"])
+        with tempfile.TemporaryDirectory(prefix="gnome-extension-") as temp_dir:
+            zip_path = os.path.join(temp_dir, "extension.zip")
+            extract_path = os.path.join(temp_dir, "extension")
+            dl_req = urllib.request.Request(dl_url, headers=headers)
+            with urllib.request.urlopen(dl_req, timeout=20) as dl_res, open(zip_path, "wb") as tmp_zip:
+                shutil.copyfileobj(dl_res, tmp_zip)
+            with zipfile.ZipFile(zip_path) as zip_ref:
+                zip_ref.extractall(extract_path)
+
+            # A valid package always contains metadata.json at its root.
+            metadata_path = os.path.join(extract_path, "metadata.json")
+            if not os.path.isfile(metadata_path):
+                raise RuntimeError("downloaded archive does not contain metadata.json")
+            with open(metadata_path, encoding="utf-8") as metadata_file:
+                if json.load(metadata_file).get("uuid") != uuid:
+                    raise RuntimeError("downloaded archive UUID does not match")
+
+            # Do not leave a half-installed extension if extraction or validation fails.
+            os.makedirs(ext_dir, exist_ok=True)
+            shutil.move(extract_path, target_path)
+        print(f"   \033[38;2;163;190;140m✔\033[0m Successfully downloaded and installed: {uuid}")
     except Exception as e:
         print(f"   \033[38;2;235;203;139mℹ\033[0m Could not download {uuid}: {e}")
 EOF
     fi
 
-    # 3. Enable extensions
+}
+
+enable_extensions() {
     log_info "Activating GNOME extensions..."
-    if [[ -f "${CONFIG_DIR}/extensions-list.txt" ]]; then
-        while IFS= read -r ext_uuid || [[ -n "$ext_uuid" ]]; do
-            ext_uuid="$(echo "$ext_uuid" | tr -d '\r\n ')"
-            if [[ -n "$ext_uuid" ]]; then
-                gnome-extensions enable "$ext_uuid" 2>/dev/null || true
-            fi
-        done < "${CONFIG_DIR}/extensions-list.txt"
-        log_success "All configured extensions enabled."
+    local enabled_count=0 failed_count=0 ext_uuid enable_error
+    if ! command -v gnome-extensions >/dev/null 2>&1; then
+        log_warn "gnome-extensions is unavailable; extensions were not enabled."
+        return
+    fi
+    [[ -f "${CONFIG_DIR}/extensions-list.txt" ]] || return
+
+    while IFS= read -r ext_uuid || [[ -n "$ext_uuid" ]]; do
+        ext_uuid="${ext_uuid//$'\r'/}"
+        ext_uuid="${ext_uuid// /}"
+        [[ -n "${ext_uuid}" ]] || continue
+        if enable_error="$(gnome-extensions enable "${ext_uuid}" 2>&1)"; then
+            ((enabled_count += 1))
+        else
+            ((failed_count += 1))
+            log_warn "Could not enable ${ext_uuid}: ${enable_error:-extension is missing or incompatible}"
+        fi
+    done < "${CONFIG_DIR}/extensions-list.txt"
+
+    if (( failed_count == 0 )); then
+        log_success "Enabled ${enabled_count} configured extension(s)."
+    else
+        log_warn "Enabled ${enabled_count} extension(s); ${failed_count} could not be enabled."
     fi
 }
 
 # ==============================================================================
-#  Step 4: Deploy MacTahoe Themes
+#  Step 5: Deploy MacTahoe Themes
 # ==============================================================================
 install_themes() {
-    step_header "4" "Deploying MacTahoe Desktop & Shell Themes"
+    step_header "5" "Deploying MacTahoe Desktop & Shell Themes"
 
     mkdir -p "${THEMES_DEST_DIR}" "${LOCAL_THEMES_DEST_DIR}"
 
     if [[ -d "${THEME_DIR}" ]]; then
         log_info "Installing MacTahoe theme variants into ${COLOR_MUTED}~/.themes${COLOR_RESET} and ${COLOR_MUTED}~/.local/share/themes${COLOR_RESET}..."
-        cp -r "${THEME_DIR}/"* "${THEMES_DEST_DIR}/" 2>/dev/null || true
-        cp -r "${THEME_DIR}/"* "${LOCAL_THEMES_DEST_DIR}/" 2>/dev/null || true
-        log_success "MacTahoe themes installed successfully:"
-        log_sub "MacTahoe-Dark-blue"
-        log_sub "MacTahoe-Dark-blue-hdpi"
-        log_sub "MacTahoe-Dark-blue-xhdpi"
+        if cp -a "${THEME_DIR}/." "${THEMES_DEST_DIR}/" && cp -a "${THEME_DIR}/." "${LOCAL_THEMES_DEST_DIR}/"; then
+            log_success "MacTahoe themes installed successfully:"
+            log_sub "MacTahoe-Dark-blue"
+            log_sub "MacTahoe-Dark-blue-hdpi"
+            log_sub "MacTahoe-Dark-blue-xhdpi"
+        else
+            log_warn "One or more theme files could not be copied; check permissions and free disk space."
+        fi
     else
         log_warn "Mactahoe-Theme directory not found in repository."
     fi
 }
 
 # ==============================================================================
-#  Step 5: Apply Desktop & Extension Configurations
+#  Step 6: Apply Desktop & Extension Configurations
 # ==============================================================================
 apply_configurations() {
-    step_header "5" "Applying dconf Configurations & Styling"
+    step_header "6" "Applying dconf Configurations & Styling"
 
     # Load extension settings
     if [[ -f "${CONFIG_DIR}/extensions.dconf" ]]; then
@@ -313,6 +411,13 @@ apply_configurations() {
         dconf load /org/gnome/desktop/wm/ < "${CONFIG_DIR}/wm-settings.dconf"
     fi
 
+    if [[ -f "${CONFIG_DIR}/shell-settings.dconf" ]]; then
+        log_info "Loading GNOME Shell preferences..."
+        dconf load /org/gnome/shell/ < "${CONFIG_DIR}/shell-settings.dconf"
+    fi
+
+    enable_extensions
+
     # Set theme properties explicitly
     log_info "Configuring GTK and User-Theme styling..."
     gsettings set org.gnome.desktop.interface gtk-theme "MacTahoe-Dark-blue" 2>/dev/null || true
@@ -323,10 +428,10 @@ apply_configurations() {
 }
 
 # ==============================================================================
-#  Step 6: Completion, Tweaks Prompt & Session Logout
+#  Step 7: Completion, Tweaks Prompt & Session Logout
 # ==============================================================================
 show_completion() {
-    step_header "6" "Setup Complete & Finalization"
+    step_header "7" "Setup Complete & Finalization"
 
     printf "\n"
     printf "  %s%s╭────────────────────────────────────────────────────────────────────────╮%s\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
@@ -356,7 +461,9 @@ show_completion() {
     if [[ "${do_logout}" =~ ^[Yy]$ ]]; then
         printf "\n  %sLogging out in 3 seconds... (See you on the other side!)%s\n" "${COLOR_GREEN}" "${COLOR_RESET}"
         sleep 3
-        gnome-session-quit --logout --no-prompt 2>/dev/null || gnome-session-quit --logout 2>/dev/null || pkill -u "$USER" gnome-shell || true
+        if ! gnome-session-quit --logout --no-prompt 2>/dev/null && ! gnome-session-quit --logout 2>/dev/null; then
+            log_warn "Could not log out automatically. Please use the system menu."
+        fi
     else
         printf "\n  %s✔ All set! You can log out anytime from the top-right system menu.%s\n\n" "${COLOR_GREEN}" "${COLOR_RESET}"
     fi
@@ -370,6 +477,7 @@ main() {
     check_environment
     request_sudo
     install_system_packages
+    backup_current_state
     sync_configurations
     install_extensions
     install_themes
@@ -377,4 +485,6 @@ main() {
     show_completion
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
