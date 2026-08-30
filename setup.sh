@@ -503,17 +503,9 @@ apply_configurations() {
         dconf load /org/gnome/shell/ < "${CONFIG_DIR}/shell-settings.dconf"
     fi
 
-    # Burn My Windows profiles are external files. The dconf backup alone
-    # contains the original user's absolute path, so install a portable copy
-    # and point the extension at it for the current account.
-    local burn_profile_source="${CONFIG_DIR}/burn-my-windows/profiles/macos.conf"
-    if [[ -f "${burn_profile_source}" ]]; then
-        local burn_profile_dest="${HOME}/.config/burn-my-windows/profiles/gnome-to-macos.conf"
-        mkdir -p "$(dirname "${burn_profile_dest}")"
-        cp -a "${burn_profile_source}" "${burn_profile_dest}"
-        dconf write /org/gnome/shell/extensions/burn-my-windows/active-profile "'${burn_profile_dest}'"
-        log_success "Burn My Windows profile restored."
-    fi
+    # Do not import a profile path from another account. An empty active profile
+    # makes Burn My Windows use the extension's built-in defaults.
+    dconf write /org/gnome/shell/extensions/burn-my-windows/active-profile "''"
 
     # Enable only UUIDs which the running Shell has registered. This prevents
     # a stale enabled-extensions setting from trying to start on-disk-only

@@ -63,6 +63,6 @@ rg -q 'shell-settings.dconf' setup.sh
 rg -q 'glib-compile-schemas' setup.sh
 rg -q 'InstallRemoteExtension' setup.sh
 test -f Extensions-Configs/enabled-extensions-list.txt
-test -f Extensions-Configs/burn-my-windows/profiles/macos.conf
+rg -q 'active-profile "\x27\x27"' setup.sh
 rg -q 'BACKUP_LATEST_FILE' uninstall.sh
 printf 'PASS: installer safety checks\n'

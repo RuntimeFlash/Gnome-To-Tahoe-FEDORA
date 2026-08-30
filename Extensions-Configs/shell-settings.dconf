@@ -137,7 +137,6 @@ brightness=0.59999999999999998
 sigma=30
 
 [extensions/burn-my-windows]
-active-profile='/home/ayushpandey/.config/burn-my-windows/profiles/1786984550476781.conf'
 last-extension-version=48
 last-prefs-version=48
 prefs-open-count=3

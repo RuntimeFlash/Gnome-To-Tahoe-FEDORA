@@ -79,17 +79,6 @@ except Exception as e:
     print('Warning: could not parse enabled-extensions array:', e)
 " 2>/dev/null || true
 
-# Burn My Windows stores selected effect profiles outside dconf. Preserve the
-# active profile too, so it can be restored on another user account.
-burn_profile="$(dconf read /org/gnome/shell/extensions/burn-my-windows/active-profile 2>/dev/null || true)"
-burn_profile="${burn_profile#\'}"
-burn_profile="${burn_profile%\'}"
-if [[ -f "${burn_profile}" ]]; then
-    mkdir -p "${CONFIG_DIR}/burn-my-windows/profiles"
-    cp -a "${burn_profile}" "${CONFIG_DIR}/burn-my-windows/profiles/macos.conf"
-    log_success "Saved active Burn My Windows profile."
-fi
-
 log_success "Saved enabled extensions to: ${COLOR_MUTED}Extensions-Configs/extensions-list.txt${COLOR_RESET}"
 
 printf "\n  %s✔ Configurations successfully backed up!%s\n\n" "${COLOR_GREEN}" "${COLOR_RESET}"
