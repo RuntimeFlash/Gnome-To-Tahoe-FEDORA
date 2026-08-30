@@ -316,17 +316,39 @@ if shell_version:
 else:
     print("   \033[38;2;235;203;139mℹ\033[0m Could not determine the GNOME Shell version; skipping repository downloads.")
 
+def shell_has_extension(shell_cli, uuid):
+    return bool(shell_cli and subprocess.run(
+        [shell_cli, "info", uuid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    ).returncode == 0)
+
+def wait_for_shell_registration(shell_cli, uuid, seconds=20):
+    """Allow GNOME Shell to come back after a D-Bus disconnect/restart."""
+    for _ in range(seconds):
+        if shell_has_extension(shell_cli, uuid):
+            return True
+        time.sleep(1)
+    return False
+
+def install_with_live_shell(live_installer, uuid):
+    return subprocess.run(
+        [live_installer, "call", "--session", "--dest", "org.gnome.Shell.Extensions",
+         "--object-path", "/org/gnome/Shell/Extensions", "--method",
+         "org.gnome.Shell.Extensions.InstallRemoteExtension", uuid],
+        text=True, capture_output=True,
+    )
+
 for uuid in uuids:
     target_path = os.path.join(ext_dir, uuid)
     shell_cli = shutil.which("gnome-extensions")
-    shell_knows_extension = bool(shell_cli and subprocess.run(
-        [shell_cli, "info", uuid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    ).returncode == 0)
+    shell_knows_extension = shell_has_extension(shell_cli, uuid)
     if (os.path.isdir(target_path) or os.path.islink(target_path)) and shell_knows_extension:
         print(f"   \033[38;2;163;190;140m✔\033[0m Extension '{uuid}' is already present.")
         continue
     if uuid == "superbar@Furkan-rgb.github.io" and os.path.isdir(target_path):
         print(f"   \033[38;2;235;203;139mℹ\033[0m Superbar is installed from upstream; GNOME Shell will discover it on its next session refresh.")
+        continue
+    if uuid == "liquid-glass-v2@thinkingcoding1231.gmail.com" and os.path.isdir(target_path):
+        print(f"   \033[38;2;235;203;139mℹ\033[0m Liquid Glass V2 is installed from GitHub. GNOME Shell must refresh before it can be enabled.")
         continue
     
     if not shell_version:
@@ -355,29 +377,31 @@ for uuid in uuids:
         live_installer = shutil.which("gdbus")
         installed_live = False
         if live_installer:
-            result = subprocess.run(
-                [live_installer, "call", "--session", "--dest", "org.gnome.Shell.Extensions",
-                 "--object-path", "/org/gnome/Shell/Extensions", "--method",
-                 "org.gnome.Shell.Extensions.InstallRemoteExtension", uuid],
-                text=True, capture_output=True,
-            )
+            result = install_with_live_shell(live_installer, uuid)
             installed_live = result.returncode == 0 and "successful" in result.stdout.lower()
 
+            # Shell can briefly disconnect from D-Bus while it reloads after an
+            # approved installation. Treat NoReply as an indeterminate result,
+            # wait for the UUID to appear, then retry once if it did not.
+            disconnected = "NoReply" in result.stderr or "Remote peer disconnected" in result.stderr
+            if not installed_live and disconnected:
+                print(f"   Waiting for GNOME Shell to recover after installing {uuid}...")
+                installed_live = wait_for_shell_registration(shell_cli, uuid)
+                if not installed_live:
+                    retry = install_with_live_shell(live_installer, uuid)
+                    installed_live = retry.returncode == 0 and "successful" in retry.stdout.lower()
+                    result = retry
+
+            if installed_live:
+                installed_live = wait_for_shell_registration(shell_cli, uuid)
+
         if installed_live:
-            # Shell needs a moment to expose the just-installed UUID to its CLI.
-            for _ in range(5):
-                if shell_cli and subprocess.run(
-                    [shell_cli, "info", uuid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                ).returncode == 0:
-                    break
-                time.sleep(1)
-            else:
-                raise RuntimeError("GNOME Shell installed it but did not register it; try again after a few seconds")
+            pass
         else:
             reason = result.stderr.strip() if live_installer else "no active GNOME Shell session"
             status = result.stdout.strip() if live_installer else ""
             raise RuntimeError(
-                "GNOME Shell did not approve the live install"
+                "GNOME Shell did not register the live install"
                 + (f" ({status})" if status else "")
                 + (f": {reason}" if reason else "")
             )
