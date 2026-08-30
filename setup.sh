@@ -16,19 +16,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="${SCRIPT_DIR}/Extensions-Configs"
-THEMES_DIR="${SCRIPT_DIR}/Themes"
 THEME_REPO_DIR="${SCRIPT_DIR}/MacTahoe-gtk-theme"
 THEME_REPO_URL="https://github.com/vinceliuice/MacTahoe-gtk-theme.git"
-ICONS_REPO_DIR="${THEMES_DIR}/MacTahoe-icon-theme"
-ICONS_REPO_URL="https://github.com/vinceliuice/MacTahoe-icon-theme.git"
-CURSORS_SRC_DIR="${THEMES_DIR}/macOS-cursors"
 ENABLED_EXTENSIONS_FILE="${CONFIG_DIR}/enabled-extensions-list.txt"
 USER_DATA_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}"
 EXT_DEST_DIR="${USER_DATA_DIR}/gnome-shell/extensions"
 THEMES_DEST_DIR="${HOME}/.themes"
 LOCAL_THEMES_DEST_DIR="${USER_DATA_DIR}/themes"
-ICONS_DEST_DIR="${USER_DATA_DIR}/icons"
-USER_ICONS_DIR="${HOME}/.icons"
 BACKUP_ROOT="${XDG_STATE_HOME:-${HOME}/.local/state}/gnome-to-macos"
 BACKUP_LATEST_FILE="${BACKUP_ROOT}/latest"
 
@@ -485,11 +479,10 @@ enable_extensions() {
 #  Step 5: Deploy MacTahoe Themes
 # ==============================================================================
 install_themes() {
-    step_header "5" "Deploying MacTahoe Desktop, Cursor & Icon Themes"
+    step_header "5" "Deploying MacTahoe Desktop Themes"
 
-    mkdir -p "${THEMES_DEST_DIR}" "${LOCAL_THEMES_DEST_DIR}" "${ICONS_DEST_DIR}" "${USER_ICONS_DIR}"
+    mkdir -p "${THEMES_DEST_DIR}" "${LOCAL_THEMES_DEST_DIR}"
 
-    # 1. MacTahoe GTK & Shell Themes
     if [[ ! -d "${THEME_REPO_DIR}" ]]; then
         log_info "Cloning MacTahoe GTK theme repository..."
         if ! git clone "${THEME_REPO_URL}" "${THEME_REPO_DIR}"; then
@@ -498,7 +491,7 @@ install_themes() {
     fi
 
     if [[ -f "${THEME_REPO_DIR}/install.sh" ]]; then
-        log_info "Installing MacTahoe theme variants and GTK 4 libadwaita styling..."
+        log_info "Installing MacTahoe theme variants (GTK, Shell, icons, cursors, libadwaita)..."
         if "${THEME_REPO_DIR}/install.sh" -c dark -t blue -l; then
             log_success "MacTahoe themes and libadwaita styling deployed successfully."
         else
@@ -506,32 +499,6 @@ install_themes() {
         fi
     else
         log_warn "MacTahoe theme installer script not found."
-    fi
-
-    # 2. macOS Mouse Cursor Theme
-    if [[ -d "${CURSORS_SRC_DIR}" ]]; then
-        log_info "Deploying macOS mouse cursors..."
-        mkdir -p "${USER_ICONS_DIR}/macOS" "${ICONS_DEST_DIR}/macOS"
-        cp -a "${CURSORS_SRC_DIR}/." "${USER_ICONS_DIR}/macOS/"
-        cp -a "${CURSORS_SRC_DIR}/." "${ICONS_DEST_DIR}/macOS/"
-        log_success "macOS mouse cursors deployed to ~/.icons/macOS and ~/.local/share/icons/macOS."
-    fi
-
-    # 3. MacTahoe Icon Theme
-    if [[ ! -d "${ICONS_REPO_DIR}" ]]; then
-        log_info "Cloning MacTahoe icon theme repository..."
-        if ! git clone "${ICONS_REPO_URL}" "${ICONS_REPO_DIR}"; then
-            log_warn "Failed to clone MacTahoe icon theme repository."
-        fi
-    fi
-
-    if [[ -f "${ICONS_REPO_DIR}/install.sh" ]]; then
-        log_info "Installing MacTahoe icon theme variants..."
-        if "${ICONS_REPO_DIR}/install.sh" -t blue; then
-            log_success "MacTahoe icon themes deployed to ~/.local/share/icons."
-        else
-            log_warn "MacTahoe icon theme installer encountered an issue."
-        fi
     fi
 }
 
@@ -610,8 +577,8 @@ apply_configurations() {
     gsettings set org.gnome.desktop.interface gtk-theme "MacTahoe-Dark-blue" 2>/dev/null || true
     gsettings set org.gnome.desktop.interface color-scheme "prefer-dark" 2>/dev/null || true
     gsettings set org.gnome.shell.extensions.user-theme name "MacTahoe-Dark-blue" 2>/dev/null || true
-    gsettings set org.gnome.desktop.interface cursor-theme "macOS" 2>/dev/null || true
-    gsettings set org.gnome.desktop.interface icon-theme "MacTahoe-light" 2>/dev/null || true
+    gsettings set org.gnome.desktop.interface cursor-theme "MacTahoe-dark" 2>/dev/null || true
+    gsettings set org.gnome.desktop.interface icon-theme "MacTahoe-blue-dark" 2>/dev/null || true
 
     log_success "Theme, cursor, and icon styling preferences configured."
 }
@@ -626,17 +593,15 @@ show_completion() {
     printf "  %s%s╭────────────────────────────────────────────────────────────────────────╮%s\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
     printf "  %s%s│%s   %s✔ Transformation successfully completed!%s                             %s%s│%s\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
     printf "  %s%s│%s                                                                        %s%s│%s\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
-    printf "  %s%s│%s   %s• MacTahoe GTK & Shell themes deployed to ~/.themes%s                  %s%s│%s\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}" "${COLOR_CYAN}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
-    printf "  %s%s│%s   %s• macOS mouse cursor theme deployed to ~/.icons/macOS%s                %s%s│%s\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}" "${COLOR_CYAN}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
-    printf "  %s%s│%s   %s• MacTahoe icon theme deployed to ~/.local/share/icons%s               %s%s│%s\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}" "${COLOR_CYAN}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
+    printf "  %s%s│%s   %s• MacTahoe GTK, Shell, icon & cursor themes deployed%s                %s%s│%s\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}" "${COLOR_CYAN}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
     printf "  %s%s│%s   %s• Liquid Glass V2 & GNOME extensions installed & activated%s         %s%s│%s\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}" "${COLOR_CYAN}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
     printf "  %s%s│%s   %s• Desktop interface & extension configurations applied%s             %s%s│%s\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}" "${COLOR_CYAN}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
     printf "  %s%s╰────────────────────────────────────────────────────────────────────────╯%s\n\n" "${COLOR_BOLD}" "${COLOR_GREEN}" "${COLOR_RESET}"
 
     printf "  %s✦ GNOME Tweaks Appearance Settings:%s\n" "${COLOR_BOLD}${COLOR_CYAN}" "${COLOR_RESET}"
     printf "    %s• Applications (Legacy):%s %sMacTahoe-Dark-blue%s\n" "${COLOR_MUTED}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}"
-    printf "    %s• Cursor / Mouse:%s        %smacOS%s\n" "${COLOR_MUTED}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}"
-    printf "    %s• Icons:%s                 %sMacTahoe-light%s (or MacTahoe-dark)\n" "${COLOR_MUTED}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}"
+    printf "    %s• Cursor / Mouse:%s        %sMacTahoe-dark%s\n" "${COLOR_MUTED}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}"
+    printf "    %s• Icons:%s                 %sMacTahoe-blue-dark%s\n" "${COLOR_MUTED}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}"
     printf "    %s• Shell Theme:%s           %sMacTahoe-Dark-blue%s\n\n" "${COLOR_MUTED}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}"
 
     # Prompt to open GNOME Tweaks
