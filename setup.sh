@@ -425,13 +425,13 @@ compile_extension_schemas() {
     local ext_uuid="$1"
     local schemas_dir="${EXT_DEST_DIR}/${ext_uuid}/schemas"
 
-    [[ -d "${schemas_dir}" ]] || return
+    [[ -d "${schemas_dir}" ]] || return 0
     if ! find "${schemas_dir}" -maxdepth 1 -name '*.gschema.xml' -print -quit | grep -q .; then
-        return
+        return 0
     fi
     if ! command -v glib-compile-schemas >/dev/null 2>&1; then
         log_warn "${ext_uuid} has schemas, but glib-compile-schemas is unavailable."
-        return
+        return 0
     fi
     if ! glib-compile-schemas "${schemas_dir}"; then
         log_warn "Could not compile GSettings schemas for ${ext_uuid}."
