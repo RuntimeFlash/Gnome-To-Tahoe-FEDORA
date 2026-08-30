@@ -503,9 +503,16 @@ apply_configurations() {
         dconf load /org/gnome/shell/ < "${CONFIG_DIR}/shell-settings.dconf"
     fi
 
-    # Do not import a profile path from another account. An empty active profile
-    # makes Burn My Windows use the extension's built-in defaults.
-    dconf write /org/gnome/shell/extensions/burn-my-windows/active-profile "''"
+    # Burn My Windows profiles live outside dconf. Copy the exported Standard
+    # Profile and rewrite its path for the current user before enabling it.
+    local burn_profile_source="${CONFIG_DIR}/burn-my-windows/profiles/standard.conf"
+    if [[ -f "${burn_profile_source}" ]]; then
+        local burn_profile_dest="${HOME}/.config/burn-my-windows/profiles/standard.conf"
+        mkdir -p "$(dirname "${burn_profile_dest}")"
+        cp -a "${burn_profile_source}" "${burn_profile_dest}"
+        dconf write /org/gnome/shell/extensions/burn-my-windows/active-profile "'${burn_profile_dest}'"
+        log_success "Burn My Windows Standard Profile restored."
+    fi
 
     # Enable only UUIDs which the running Shell has registered. This prevents
     # a stale enabled-extensions setting from trying to start on-disk-only
