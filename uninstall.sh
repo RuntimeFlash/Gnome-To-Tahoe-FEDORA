@@ -10,6 +10,11 @@ USER_DATA_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}"
 EXT_DEST_DIR="${USER_DATA_DIR}/gnome-shell/extensions"
 THEMES_DEST_DIR="${HOME}/.themes"
 LOCAL_THEMES_DEST_DIR="${USER_DATA_DIR}/themes"
+THEMES_DIR="${SCRIPT_DIR}/Themes"
+THEME_REPO_DIR="${SCRIPT_DIR}/MacTahoe-gtk-theme"
+ICONS_REPO_DIR="${THEMES_DIR}/MacTahoe-icon-theme"
+ICONS_DEST_DIR="${USER_DATA_DIR}/icons"
+USER_ICONS_DIR="${HOME}/.icons"
 BACKUP_ROOT="${XDG_STATE_HOME:-${HOME}/.local/state}/gnome-to-macos"
 BACKUP_LATEST_FILE="${BACKUP_ROOT}/latest"
 
@@ -113,7 +118,34 @@ else
     done
 fi
 
-for theme_name in MacTahoe-Dark-blue MacTahoe-Dark-blue-hdpi MacTahoe-Dark-blue-xhdpi; do
+if [[ -f "${THEME_REPO_DIR}/install.sh" ]]; then
+    rm -rf /tmp/MacTahoe.lock 2>/dev/null || true
+    sudo_stub_dir="$(mktemp -d)"
+    cat > "${sudo_stub_dir}/sudo" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+    chmod +x "${sudo_stub_dir}/sudo"
+    PATH="${sudo_stub_dir}:${PATH}" "${THEME_REPO_DIR}/install.sh" -r >/dev/null 2>&1 || true
+    rm -rf -- "${sudo_stub_dir}"
+    info "Removed MacTahoe themes via theme uninstaller."
+fi
+
+if [[ -f "${ICONS_REPO_DIR}/install.sh" ]]; then
+    "${ICONS_REPO_DIR}/install.sh" -r >/dev/null 2>&1 || true
+    info "Removed MacTahoe icons via icon uninstaller."
+fi
+
+# Remove macOS cursor theme
+[[ -e "${USER_ICONS_DIR}/macOS" ]] && rm -rf -- "${USER_ICONS_DIR}/macOS"
+[[ -e "${ICONS_DEST_DIR}/macOS" ]] && rm -rf -- "${ICONS_DEST_DIR}/macOS"
+
+for icon_name in MacTahoe MacTahoe-dark MacTahoe-light MacTahoe-blue MacTahoe-blue-dark MacTahoe-blue-light; do
+    [[ -e "${ICONS_DEST_DIR}/${icon_name}" ]] && rm -rf -- "${ICONS_DEST_DIR}/${icon_name}"
+    [[ -e "${USER_ICONS_DIR}/${icon_name}" ]] && rm -rf -- "${USER_ICONS_DIR}/${icon_name}"
+done
+
+for theme_name in MacTahoe-Dark-blue MacTahoe-Dark-blue-hdpi MacTahoe-Dark-blue-xhdpi MacTahoe-Dark-solid-blue MacTahoe-Dark-solid-blue-hdpi MacTahoe-Dark-solid-blue-xhdpi; do
     [[ -e "${THEMES_DEST_DIR}/${theme_name}" ]] && rm -rf -- "${THEMES_DEST_DIR}/${theme_name}"
     [[ -e "${LOCAL_THEMES_DEST_DIR}/${theme_name}" ]] && rm -rf -- "${LOCAL_THEMES_DEST_DIR}/${theme_name}"
 done

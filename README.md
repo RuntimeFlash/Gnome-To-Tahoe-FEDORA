@@ -7,12 +7,14 @@ A calm, refined, and fully automated setup suite to transform your GNOME desktop
 ## 🌟 Features
 
 - **Automated Fedora Package Setup**: Installs `gnome-tweaks`, `git`, and GNOME Extension Manager with safe privilege handling.
-- **MacTahoe Themes**: Deploys `MacTahoe-Dark-blue`, `MacTahoe-Dark-blue-hdpi`, and `MacTahoe-Dark-blue-xhdpi` to `~/.themes` and `~/.local/share/themes`.
-- **GTK 4 / libadwaita Override**: Applies the extracted MacTahoe GTK 4 stylesheet and assets to `~/.config/gtk-4.0` for apps that ignore the normal GTK theme setting. The previous override is saved in the automatic backup directory.
+- **MacTahoe Themes**: Deploys `MacTahoe-Dark-blue`, `MacTahoe-Dark-blue-hdpi`, and `MacTahoe-Dark-blue-xhdpi` to `~/.themes`.
+- **macOS Mouse Cursors**: Deploys authentic macOS cursor theme to `~/.icons/macOS` and `~/.local/share/icons/macOS`.
+- **MacTahoe Icons**: Installs macOS icon variants to `~/.local/share/icons/`.
+- **GTK 4 / libadwaita Integration**: Deploys stylesheet and assets to `~/.config/gtk-4.0` for full libadwaita styling.
 - **Liquid Glass V2**: Clones and installs the [Liquid Glass V2](https://github.com/RuntimeFlash/Liquid-Glass-V2.git) extension into `~/.local/share/gnome-shell/extensions/`.
 - **Full Extension & Preference Sync**: Automated dconf export/restore preserving your exact layout, dock, animations, blur, lockscreen, and shell tweaks.
 - **Live GNOME Installation**: Uses GNOME Shell’s session service when available, so Extensions.gnome.org downloads can be enabled immediately rather than only after the next login.
-- **Curated Extension Set**: Installs the extensions listed in `Extensions-Configs/extensions-list.txt`; `enabled-extensions-list.txt` separately controls which ones start enabled. Blur My Shell and Rounded Window Corners are not part of the curated set.
+- **Curated Extension Set**: Installs the extensions listed in `Extensions-Configs/extensions-list.txt`; `enabled-extensions-list.txt` separately controls which ones start enabled.
 - **Automatic Safety Snapshot**: Before applying changes, saves your user-installed extensions and GNOME settings under `~/.local/state/gnome-to-macos/`.
 - **Restorable Uninstall**: `uninstall.sh` removes this project's changes and restores the latest pre-install snapshot.
 
@@ -36,7 +38,7 @@ The script will:
 3. Back up your current extensions and GNOME configuration.
 4. Synchronize extension preferences.
 5. Clone and deploy **Liquid Glass V2** and other configured GNOME extensions.
-6. Deploy **MacTahoe** themes and apply styling.
+6. Deploy **MacTahoe** desktop/shell themes, **macOS** cursors, and **MacTahoe** icon themes.
 7. Open **GNOME Tweaks** for visual confirmation and offer a graceful session logout.
 
 ## ↩️ Uninstall and Restore
@@ -83,10 +85,10 @@ This updates all files inside `Extensions-Configs/` so your repository stays in 
 ├── backup-configs.sh        # Quick exporter for GNOME & extension settings
 ├── tests/test-installer.sh  # Safe syntax and extension API checks
 ├── tests/test-setup-uninstall.sh # Isolated setup/uninstall integration test
-├── Mactahoe-Theme/          # MacTahoe GTK & Shell themes (Standard, HDPI, XHDPI)
-│   ├── MacTahoe-Dark-blue
-│   ├── MacTahoe-Dark-blue-hdpi
-│   └── MacTahoe-Dark-blue-xhdpi
+├── MacTahoe-gtk-theme/     # MacTahoe GTK & Shell theme repository & installer
+├── Themes/                  # Extra theme packages (mouse & icons)
+│   ├── macOS-cursors/       # macOS mouse cursor theme
+│   └── MacTahoe-icon-theme/ # MacTahoe icon theme repository & installer
 ├── Extensions-Configs/      # dconf backups and extension lists
 │   ├── extensions.dconf
 │   ├── interface-settings.dconf
@@ -100,12 +102,12 @@ This updates all files inside `Extensions-Configs/` so your repository stays in 
 
 ## 🎨 Setting Up in GNOME Tweaks
 
-If you wish to manually inspect or change appearance settings:
+If you wish to manually inspect or select theme settings in **GNOME Tweaks**:
 1. Open **GNOME Tweaks** (or press `Y` at the end of `./setup.sh`).
 2. Navigate to the **Appearance** tab:
-   - **Applications / Legacy Applications**: `MacTahoe-Dark-blue`
-   - **Cursor**: `MacTahoe-light`
-   - **Icons**: `MacTahoe-light`
+   - **Applications (Legacy Applications)**: `MacTahoe-Dark-blue`
+   - **Cursor / Mouse**: `macOS`
+   - **Icons**: `MacTahoe-light` (or `MacTahoe-dark`)
    - **Shell**: `MacTahoe-Dark-blue` *(Requires User Themes extension)*
 3. Navigate to **Window Titlebars**:
    - Placement: **Left** (macOS style)
