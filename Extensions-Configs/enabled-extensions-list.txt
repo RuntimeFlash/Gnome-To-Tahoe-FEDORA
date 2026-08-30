@@ -1,5 +1,4 @@
 Bluetooth-Battery-Meter@maniacx.github.com
-blur-my-shell@aunetx
 burn-my-windows@schneegans.github.com
 caffeine@patapon.info
 copyous@boerdereinar.dev
@@ -10,10 +9,7 @@ just-perfection-desktop@just-perfection
 kiwi@kemma
 liquid-glass-v2@thinkingcoding1231.gmail.com
 pip-on-top@rafostar.github.com
-rounded-window-corners@fxgn
 smile-extension@mijorus.it
 steal-my-focus-window@steal-my-focus-window
-Vitals@CoreCoding.com
 superbar@Furkan-rgb.github.io
-user-theme@gnome-shell-extensions.gcampax.github.com
-wack-lockscreen-clock@rinzler69-wastaken.github.com
+Vitals@CoreCoding.com

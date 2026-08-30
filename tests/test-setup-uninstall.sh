@@ -62,6 +62,8 @@ printf 'y\n' | "${REPO_DIR}/uninstall.sh" >/dev/null
 [[ -f "${HOME}/.local/share/gnome-shell/extensions/project@test/metadata.json" ]]
 [[ -f "${XDG_STATE_HOME}/gsettings-calls" ]]
 rg -q 'set org.gnome.shell enabled-extensions' "${XDG_STATE_HOME}/gsettings-calls"
-[[ -e "${HOME}/.themes/MacTahoe-Dark-blue.gnome-to-macos-removed" ]]
-[[ -e "${HOME}/.local/share/themes/MacTahoe-Dark-blue.gnome-to-macos-removed" ]]
-printf 'PASS: uninstall restores the snapshot and preserves removed project files\n'
+rg -q "\['original@test'\]" "${XDG_STATE_HOME}/gsettings-calls"
+[[ ! -e "${HOME}/.themes/MacTahoe-Dark-blue" ]]
+[[ ! -e "${HOME}/.local/share/themes/MacTahoe-Dark-blue" ]]
+[[ ! -e "${XDG_STATE_HOME}/gnome-to-macos/latest" ]]
+printf 'PASS: uninstall disables project extensions, restores the snapshot, and deletes project files\n'

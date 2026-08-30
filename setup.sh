@@ -17,6 +17,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="${SCRIPT_DIR}/Extensions-Configs"
 THEME_DIR="${SCRIPT_DIR}/Mactahoe-Theme"
+ENABLED_EXTENSIONS_FILE="${CONFIG_DIR}/enabled-extensions-list.txt"
 USER_DATA_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}"
 EXT_DEST_DIR="${USER_DATA_DIR}/gnome-shell/extensions"
 THEMES_DEST_DIR="${HOME}/.themes"
@@ -151,6 +152,13 @@ backup_current_state() {
     local backup_dir
     umask 077
     mkdir -p "${BACKUP_ROOT}"
+    if [[ -f "${BACKUP_LATEST_FILE}" ]]; then
+        IFS= read -r backup_dir < "${BACKUP_LATEST_FILE}" || true
+        if [[ -n "${backup_dir:-}" && -d "${backup_dir}" ]]; then
+            log_success "Keeping the original pre-install backup at ${COLOR_MUTED}${backup_dir}${COLOR_RESET}"
+            return
+        fi
+    fi
     backup_dir="$(mktemp -d "${BACKUP_ROOT}/backup-XXXXXXXX-XXXXXX")"
 
     log_info "Saving a restorable snapshot to ${COLOR_MUTED}${backup_dir}${COLOR_RESET}..."
@@ -177,7 +185,7 @@ sync_configurations() {
     mkdir -p "${CONFIG_DIR}"
 
     local required_config configs_complete=true
-    for required_config in extensions.dconf interface-settings.dconf wm-settings.dconf shell-settings.dconf enabled-extensions.txt extensions-list.txt; do
+    for required_config in extensions.dconf interface-settings.dconf wm-settings.dconf shell-settings.dconf enabled-extensions.txt extensions-list.txt enabled-extensions-list.txt; do
         [[ -f "${CONFIG_DIR}/${required_config}" ]] || configs_complete=false
     done
     if [[ "${configs_complete}" == true ]]; then
@@ -195,6 +203,20 @@ sync_configurations() {
     # Format list for iterator
     if [[ -f "${CONFIG_DIR}/enabled-extensions.txt" && ! -f "${CONFIG_DIR}/extensions-list.txt" ]]; then
         CONFIG_FILE="${CONFIG_DIR}/enabled-extensions.txt" LIST_FILE="${CONFIG_DIR}/extensions-list.txt" python3 - <<'EOF'
+import ast
+import os
+
+with open(os.environ['CONFIG_FILE'], encoding='utf-8') as source:
+    extensions = ast.literal_eval(source.read().strip())
+if not isinstance(extensions, list) or not all(isinstance(extension, str) for extension in extensions):
+    raise ValueError('enabled-extensions is not a list of extension UUIDs')
+with open(os.environ['LIST_FILE'], 'w', encoding='utf-8') as destination:
+    destination.write('\n'.join(extensions) + ('\n' if extensions else ''))
+EOF
+    fi
+
+    if [[ -f "${CONFIG_DIR}/enabled-extensions.txt" && ! -f "${ENABLED_EXTENSIONS_FILE}" ]]; then
+        CONFIG_FILE="${CONFIG_DIR}/enabled-extensions.txt" LIST_FILE="${ENABLED_EXTENSIONS_FILE}" python3 - <<'EOF'
 import ast
 import os
 
@@ -235,6 +257,21 @@ install_extensions() {
         log_warn "Could not clone Liquid-Glass-V2 repository. Checking for local copy..."
     fi
     rm -rf "${temp_clone_dir}"
+
+    # Superbar was removed from extensions.gnome.org, so install the maintained
+    # upstream copy directly instead of repeatedly reporting its repository 404.
+    local superbar_uuid="superbar@Furkan-rgb.github.io"
+    if [[ -f "${CONFIG_DIR}/extensions-list.txt" ]] && grep -Fxq "${superbar_uuid}" "${CONFIG_DIR}/extensions-list.txt" && [[ ! -d "${EXT_DEST_DIR}/${superbar_uuid}" ]]; then
+        log_info "Cloning and installing ${COLOR_BLUE}Superbar${COLOR_RESET} from its upstream repository..."
+        temp_clone_dir="$(mktemp -d)"
+        if git clone --depth 1 "https://github.com/Furkan-rgb/superbar.git" "${temp_clone_dir}/superbar" 2>/dev/null && [[ -f "${temp_clone_dir}/superbar/metadata.json" ]] && grep -Fq "\"uuid\": \"${superbar_uuid}\"" "${temp_clone_dir}/superbar/metadata.json"; then
+            cp -a "${temp_clone_dir}/superbar" "${EXT_DEST_DIR}/${superbar_uuid}"
+            log_success "Superbar deployed from upstream."
+        else
+            log_warn "Could not obtain a valid Superbar extension from its upstream repository."
+        fi
+        rm -rf "${temp_clone_dir}"
+    fi
 
     # 2. Automated downloader & installer for listed extensions
     if [[ -f "${CONFIG_DIR}/extensions-list.txt" ]]; then
@@ -289,6 +326,9 @@ for uuid in uuids:
     ).returncode == 0)
     if (os.path.isdir(target_path) or os.path.islink(target_path)) and shell_knows_extension:
         print(f"   \033[38;2;163;190;140m✔\033[0m Extension '{uuid}' is already present.")
+        continue
+    if uuid == "superbar@Furkan-rgb.github.io" and os.path.isdir(target_path):
+        print(f"   \033[38;2;235;203;139mℹ\033[0m Superbar is installed from upstream; GNOME Shell will discover it on its next session refresh.")
         continue
     
     if not shell_version:
@@ -407,7 +447,9 @@ enable_extensions() {
         log_warn "gnome-extensions is unavailable; extensions were not enabled."
         return
     fi
-    [[ -f "${CONFIG_DIR}/extensions-list.txt" ]] || return
+    local enabled_file="${ENABLED_EXTENSIONS_FILE}"
+    [[ -f "${enabled_file}" ]] || enabled_file="${CONFIG_DIR}/extensions-list.txt"
+    [[ -f "${enabled_file}" ]] || return
 
     while IFS= read -r ext_uuid || [[ -n "$ext_uuid" ]]; do
         ext_uuid="${ext_uuid//$'\r'/}"
@@ -420,7 +462,7 @@ enable_extensions() {
             ((failed_count += 1))
             log_warn "Could not enable ${ext_uuid}: ${enable_error:-extension is missing or incompatible}"
         fi
-    done < "${CONFIG_DIR}/extensions-list.txt"
+    done < "${enabled_file}"
 
     if (( failed_count == 0 )); then
         log_success "Enabled ${enabled_count} configured extension(s)."
@@ -483,6 +525,18 @@ apply_configurations() {
     fi
 
     enable_extensions
+
+    # Burn My Windows profiles are external files. The dconf backup alone
+    # contains the original user's absolute path, so install a portable copy
+    # and point the extension at it for the current account.
+    local burn_profile_source="${CONFIG_DIR}/burn-my-windows/profiles/macos.conf"
+    if [[ -f "${burn_profile_source}" ]]; then
+        local burn_profile_dest="${HOME}/.config/burn-my-windows/profiles/gnome-to-macos.conf"
+        mkdir -p "$(dirname "${burn_profile_dest}")"
+        cp -a "${burn_profile_source}" "${burn_profile_dest}"
+        dconf write /org/gnome/shell/extensions/burn-my-windows/active-profile "'${burn_profile_dest}'"
+        log_success "Burn My Windows profile restored."
+    fi
 
     # Set theme properties explicitly
     log_info "Configuring GTK and User-Theme styling..."

@@ -62,5 +62,7 @@ rg -q 'Could not enable' setup.sh
 rg -q 'shell-settings.dconf' setup.sh
 rg -q 'glib-compile-schemas' setup.sh
 rg -q 'InstallRemoteExtension' setup.sh
+test -f Extensions-Configs/enabled-extensions-list.txt
+test -f Extensions-Configs/burn-my-windows/profiles/macos.conf
 rg -q 'BACKUP_LATEST_FILE' uninstall.sh
 printf 'PASS: installer safety checks\n'
