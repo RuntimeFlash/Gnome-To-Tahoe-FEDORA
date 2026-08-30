@@ -11,7 +11,7 @@ A calm, refined, and fully automated setup suite to transform your GNOME desktop
 - **Liquid Glass V2**: Clones and installs the [Liquid Glass V2](https://github.com/RuntimeFlash/Liquid-Glass-V2.git) extension into `~/.local/share/gnome-shell/extensions/`.
 - **Full Extension & Preference Sync**: Automated dconf export/restore preserving your exact layout, dock, animations, blur, lockscreen, and shell tweaks.
 - **Live GNOME Installation**: Uses GNOME Shell’s session service when available, so Extensions.gnome.org downloads can be enabled immediately rather than only after the next login.
-- **Curated Extension Set**: Installs the extensions listed in `Extensions-Configs/extensions-list.txt`; `enabled-extensions-list.txt` separately controls which ones start enabled.
+- **Curated Extension Set**: Installs the extensions listed in `Extensions-Configs/extensions-list.txt`; `enabled-extensions-list.txt` separately controls which ones start enabled. Blur My Shell and Rounded Window Corners are not part of the curated set.
 - **Automatic Safety Snapshot**: Before applying changes, saves your user-installed extensions and GNOME settings under `~/.local/state/gnome-to-macos/`.
 - **Restorable Uninstall**: `uninstall.sh` removes this project's changes and restores the latest pre-install snapshot.
 
