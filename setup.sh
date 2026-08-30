@@ -529,13 +529,17 @@ apply_configurations() {
 
     # Burn My Windows profiles live outside dconf. Copy the exported Standard
     # Profile and rewrite its path for the current user before enabling it.
+    # The target profile directory is intentionally replaced so another saved
+    # profile cannot remain selected or override this project's configuration.
     local burn_profile_source="${CONFIG_DIR}/burn-my-windows/profiles/standard.conf"
     if [[ -f "${burn_profile_source}" ]]; then
-        local burn_profile_dest="${HOME}/.config/burn-my-windows/profiles/standard.conf"
-        mkdir -p "$(dirname "${burn_profile_dest}")"
+        local burn_profiles_dir="${HOME}/.config/burn-my-windows/profiles"
+        local burn_profile_dest="${burn_profiles_dir}/standard.conf"
+        rm -rf -- "${burn_profiles_dir}"
+        mkdir -p "${burn_profiles_dir}"
         cp -a "${burn_profile_source}" "${burn_profile_dest}"
         dconf write /org/gnome/shell/extensions/burn-my-windows/active-profile "'${burn_profile_dest}'"
-        log_success "Burn My Windows Standard Profile restored."
+        log_success "Burn My Windows Standard Profile installed as the only profile."
     fi
 
     # Enable only UUIDs which the running Shell has registered. This prevents
