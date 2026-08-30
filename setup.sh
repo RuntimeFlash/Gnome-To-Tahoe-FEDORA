@@ -283,11 +283,9 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 import urllib.parse
 import urllib.request
-import zipfile
 
 ext_dir = os.environ["EXT_DIR"]
 config_file = os.environ["CONFIG_FILE"]
@@ -376,46 +374,22 @@ for uuid in uuids:
             else:
                 raise RuntimeError("GNOME Shell installed it but did not register it; try again after a few seconds")
         else:
-            # Headless or non-GNOME sessions cannot use D-Bus. Keep a file-based
-            # fallback, but make clear that a new Shell session must discover it.
-            dl_url = urllib.parse.urljoin("https://extensions.gnome.org", ext_info["download_url"])
-            with tempfile.TemporaryDirectory(prefix="gnome-extension-") as temp_dir:
-                zip_path = os.path.join(temp_dir, "extension.zip")
-                dl_req = urllib.request.Request(dl_url, headers=headers)
-                with urllib.request.urlopen(dl_req, timeout=20) as dl_res, open(zip_path, "wb") as tmp_zip:
-                    shutil.copyfileobj(dl_res, tmp_zip)
+            reason = result.stderr.strip() if live_installer else "no active GNOME Shell session"
+            status = result.stdout.strip() if live_installer else ""
+            raise RuntimeError(
+                "GNOME Shell did not approve the live install"
+                + (f" ({status})" if status else "")
+                + (f": {reason}" if reason else "")
+            )
 
-                if shell_cli:
-                    result = subprocess.run(
-                        [shell_cli, "install", "--force", "--print-uuid", zip_path],
-                        text=True, capture_output=True,
-                    )
-                    if result.returncode:
-                        raise RuntimeError(result.stderr.strip() or "gnome-extensions install failed")
-                else:
-                    extract_path = os.path.join(temp_dir, "extension")
-                    with zipfile.ZipFile(zip_path) as zip_ref:
-                        zip_ref.extractall(extract_path)
-                    metadata_path = os.path.join(extract_path, "metadata.json")
-                    if not os.path.isfile(metadata_path):
-                        raise RuntimeError("downloaded archive does not contain metadata.json")
-                    with open(metadata_path, encoding="utf-8") as metadata_file:
-                        if json.load(metadata_file).get("uuid") != uuid:
-                            raise RuntimeError("downloaded archive UUID does not match")
-                    os.makedirs(ext_dir, exist_ok=True)
-                    shutil.move(extract_path, target_path)
-
-        # Do not report success merely because the HTTP request worked.
+        # Do not report success merely because GNOME Extensions returned a URL.
         metadata_path = os.path.join(target_path, "metadata.json")
         if not os.path.isfile(metadata_path):
             raise RuntimeError("GNOME did not create the extension directory")
         with open(metadata_path, encoding="utf-8") as metadata_file:
             if json.load(metadata_file).get("uuid") != uuid:
                 raise RuntimeError("installed extension UUID does not match")
-        if installed_live:
-            print(f"   \033[38;2;163;190;140m✔\033[0m Installed and registered with GNOME Shell: {uuid}")
-        else:
-            print(f"   \033[38;2;235;203;139mℹ\033[0m Installed on disk only: {uuid}. Run setup from the GNOME desktop session to enable it now.")
+        print(f"   \033[38;2;163;190;140m✔\033[0m Installed and registered with GNOME Shell: {uuid}")
     except Exception as e:
         print(f"   \033[38;2;235;203;139mℹ\033[0m Could not download {uuid}: {e}")
 EOF
@@ -455,6 +429,11 @@ enable_extensions() {
         ext_uuid="${ext_uuid//$'\r'/}"
         ext_uuid="${ext_uuid// /}"
         [[ -n "${ext_uuid}" ]] || continue
+        if ! gnome-extensions info "${ext_uuid}" >/dev/null 2>&1; then
+            ((failed_count += 1))
+            log_warn "Skipping ${ext_uuid}: GNOME Shell has not registered it. Approve its install prompt and run setup again."
+            continue
+        fi
         compile_extension_schemas "${ext_uuid}"
         if enable_error="$(gnome-extensions enable "${ext_uuid}" 2>&1)"; then
             ((enabled_count += 1))
@@ -524,8 +503,6 @@ apply_configurations() {
         dconf load /org/gnome/shell/ < "${CONFIG_DIR}/shell-settings.dconf"
     fi
 
-    enable_extensions
-
     # Burn My Windows profiles are external files. The dconf backup alone
     # contains the original user's absolute path, so install a portable copy
     # and point the extension at it for the current account.
@@ -537,6 +514,11 @@ apply_configurations() {
         dconf write /org/gnome/shell/extensions/burn-my-windows/active-profile "'${burn_profile_dest}'"
         log_success "Burn My Windows profile restored."
     fi
+
+    # Enable only UUIDs which the running Shell has registered. This prevents
+    # a stale enabled-extensions setting from trying to start on-disk-only
+    # extensions and makes every enable failure actionable.
+    enable_extensions
 
     # Set theme properties explicitly
     log_info "Configuring GTK and User-Theme styling..."
