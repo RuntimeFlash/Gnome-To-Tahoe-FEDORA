@@ -247,6 +247,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 import zipfile
@@ -282,7 +283,11 @@ else:
 
 for uuid in uuids:
     target_path = os.path.join(ext_dir, uuid)
-    if os.path.isdir(target_path) or os.path.islink(target_path):
+    shell_cli = shutil.which("gnome-extensions")
+    shell_knows_extension = bool(shell_cli and subprocess.run(
+        [shell_cli, "info", uuid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    ).returncode == 0)
+    if (os.path.isdir(target_path) or os.path.islink(target_path)) and shell_knows_extension:
         print(f"   \033[38;2;163;190;140m✔\033[0m Extension '{uuid}' is already present.")
         continue
     
@@ -307,36 +312,58 @@ for uuid in uuids:
             print(f"   \033[38;2;235;203;139mℹ\033[0m No release of {uuid} supports GNOME Shell {shell_version}; skipped.")
             continue
 
-        dl_url = urllib.parse.urljoin("https://extensions.gnome.org", ext_info["download_url"])
-        with tempfile.TemporaryDirectory(prefix="gnome-extension-") as temp_dir:
-            zip_path = os.path.join(temp_dir, "extension.zip")
-            dl_req = urllib.request.Request(dl_url, headers=headers)
-            with urllib.request.urlopen(dl_req, timeout=20) as dl_res, open(zip_path, "wb") as tmp_zip:
-                shutil.copyfileobj(dl_res, tmp_zip)
+        # This is GNOME Shell's live installer. Unlike merely unpacking a ZIP,
+        # it immediately adds the extension to the running Shell registry.
+        live_installer = shutil.which("gdbus")
+        installed_live = False
+        if live_installer:
+            result = subprocess.run(
+                [live_installer, "call", "--session", "--dest", "org.gnome.Shell.Extensions",
+                 "--object-path", "/org/gnome/Shell/Extensions", "--method",
+                 "org.gnome.Shell.Extensions.InstallRemoteExtension", uuid],
+                text=True, capture_output=True,
+            )
+            installed_live = result.returncode == 0 and "successful" in result.stdout.lower()
 
-            # Let GNOME Shell install the bundle. This compiles schemas where
-            # necessary and makes GNOME's extension registry authoritative.
-            installer = shutil.which("gnome-extensions")
-            if installer:
-                result = subprocess.run(
-                    [installer, "install", "--force", "--print-uuid", zip_path],
-                    text=True, capture_output=True,
-                )
-                if result.returncode:
-                    raise RuntimeError(result.stderr.strip() or "gnome-extensions install failed")
+        if installed_live:
+            # Shell needs a moment to expose the just-installed UUID to its CLI.
+            for _ in range(5):
+                if shell_cli and subprocess.run(
+                    [shell_cli, "info", uuid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                ).returncode == 0:
+                    break
+                time.sleep(1)
             else:
-                # Fallback for minimal installations where the CLI is absent.
-                extract_path = os.path.join(temp_dir, "extension")
-                with zipfile.ZipFile(zip_path) as zip_ref:
-                    zip_ref.extractall(extract_path)
-                metadata_path = os.path.join(extract_path, "metadata.json")
-                if not os.path.isfile(metadata_path):
-                    raise RuntimeError("downloaded archive does not contain metadata.json")
-                with open(metadata_path, encoding="utf-8") as metadata_file:
-                    if json.load(metadata_file).get("uuid") != uuid:
-                        raise RuntimeError("downloaded archive UUID does not match")
-                os.makedirs(ext_dir, exist_ok=True)
-                shutil.move(extract_path, target_path)
+                raise RuntimeError("GNOME Shell installed it but did not register it; try again after a few seconds")
+        else:
+            # Headless or non-GNOME sessions cannot use D-Bus. Keep a file-based
+            # fallback, but make clear that a new Shell session must discover it.
+            dl_url = urllib.parse.urljoin("https://extensions.gnome.org", ext_info["download_url"])
+            with tempfile.TemporaryDirectory(prefix="gnome-extension-") as temp_dir:
+                zip_path = os.path.join(temp_dir, "extension.zip")
+                dl_req = urllib.request.Request(dl_url, headers=headers)
+                with urllib.request.urlopen(dl_req, timeout=20) as dl_res, open(zip_path, "wb") as tmp_zip:
+                    shutil.copyfileobj(dl_res, tmp_zip)
+
+                if shell_cli:
+                    result = subprocess.run(
+                        [shell_cli, "install", "--force", "--print-uuid", zip_path],
+                        text=True, capture_output=True,
+                    )
+                    if result.returncode:
+                        raise RuntimeError(result.stderr.strip() or "gnome-extensions install failed")
+                else:
+                    extract_path = os.path.join(temp_dir, "extension")
+                    with zipfile.ZipFile(zip_path) as zip_ref:
+                        zip_ref.extractall(extract_path)
+                    metadata_path = os.path.join(extract_path, "metadata.json")
+                    if not os.path.isfile(metadata_path):
+                        raise RuntimeError("downloaded archive does not contain metadata.json")
+                    with open(metadata_path, encoding="utf-8") as metadata_file:
+                        if json.load(metadata_file).get("uuid") != uuid:
+                            raise RuntimeError("downloaded archive UUID does not match")
+                    os.makedirs(ext_dir, exist_ok=True)
+                    shutil.move(extract_path, target_path)
 
         # Do not report success merely because the HTTP request worked.
         metadata_path = os.path.join(target_path, "metadata.json")
@@ -345,7 +372,10 @@ for uuid in uuids:
         with open(metadata_path, encoding="utf-8") as metadata_file:
             if json.load(metadata_file).get("uuid") != uuid:
                 raise RuntimeError("installed extension UUID does not match")
-        print(f"   \033[38;2;163;190;140m✔\033[0m Installed and verified: {uuid}")
+        if installed_live:
+            print(f"   \033[38;2;163;190;140m✔\033[0m Installed and registered with GNOME Shell: {uuid}")
+        else:
+            print(f"   \033[38;2;235;203;139mℹ\033[0m Installed on disk only: {uuid}. Run setup from the GNOME desktop session to enable it now.")
     except Exception as e:
         print(f"   \033[38;2;235;203;139mℹ\033[0m Could not download {uuid}: {e}")
 EOF
