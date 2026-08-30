@@ -8,6 +8,7 @@ A calm, refined, and fully automated setup suite to transform your GNOME desktop
 
 - **Automated Fedora Package Setup**: Installs `gnome-tweaks`, `git`, and GNOME Extension Manager with safe privilege handling.
 - **MacTahoe Themes**: Deploys `MacTahoe-Dark-blue`, `MacTahoe-Dark-blue-hdpi`, and `MacTahoe-Dark-blue-xhdpi` to `~/.themes` and `~/.local/share/themes`.
+- **GTK 4 / libadwaita Override**: Applies the extracted MacTahoe GTK 4 stylesheet and assets to `~/.config/gtk-4.0` for apps that ignore the normal GTK theme setting. The previous override is saved in the automatic backup directory.
 - **Liquid Glass V2**: Clones and installs the [Liquid Glass V2](https://github.com/RuntimeFlash/Liquid-Glass-V2.git) extension into `~/.local/share/gnome-shell/extensions/`.
 - **Full Extension & Preference Sync**: Automated dconf export/restore preserving your exact layout, dock, animations, blur, lockscreen, and shell tweaks.
 - **Live GNOME Installation**: Uses GNOME Shell’s session service when available, so Extensions.gnome.org downloads can be enabled immediately rather than only after the next login.

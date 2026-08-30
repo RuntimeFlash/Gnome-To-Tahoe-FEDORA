@@ -64,5 +64,7 @@ rg -q 'glib-compile-schemas' setup.sh
 rg -q 'InstallRemoteExtension' setup.sh
 test -f Extensions-Configs/enabled-extensions-list.txt
 test -f Extensions-Configs/burn-my-windows/profiles/standard.conf
+test -f Libadwaita-Override/gtk-4.0/gtk.css
+rg -q 'install_libadwaita_override' setup.sh
 rg -q 'BACKUP_LATEST_FILE' uninstall.sh
 printf 'PASS: installer safety checks\n'

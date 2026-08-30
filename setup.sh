@@ -497,6 +497,31 @@ install_themes() {
     fi
 }
 
+install_libadwaita_override() {
+    local override_source="${SCRIPT_DIR}/Libadwaita-Override/gtk-4.0/gtk.css"
+    local theme_gtk4_source="${THEME_DIR}/MacTahoe-Dark-blue/gtk-4.0"
+    local gtk4_dest="${HOME}/.config/gtk-4.0"
+    local gtk4_backup="${BACKUP_ROOT}/gtk-4.0-before-libadwaita-override"
+
+    [[ -f "${override_source}" && -d "${theme_gtk4_source}" ]] || return 0
+
+    log_info "Applying the MacTahoe GTK 4 / libadwaita override..."
+    if [[ ! -d "${gtk4_backup}" && -d "${gtk4_dest}" ]]; then
+        mkdir -p "${gtk4_backup}"
+        cp -a "${gtk4_dest}/." "${gtk4_backup}/"
+        log_sub "Saved the previous GTK 4 override to ${gtk4_backup}"
+    fi
+
+    rm -rf -- "${gtk4_dest}"
+    mkdir -p "${gtk4_dest}"
+    cp -a "${theme_gtk4_source}/." "${gtk4_dest}/"
+    # Kiwi writes account-specific imports into gtk.css. Do not distribute the
+    # source account path; Kiwi recreates its imports when it is enabled.
+    sed '/\/\* Kiwi (is not Apple) - managed imports: begin \*\//,/\/\* Kiwi (is not Apple) - managed imports: end \*\//d' \
+        "${override_source}" > "${gtk4_dest}/gtk.css"
+    log_success "GTK 4 / libadwaita override installed. Restart GTK 4 apps to see it."
+}
+
 # ==============================================================================
 #  Step 6: Apply Desktop & Extension Configurations
 # ==============================================================================
@@ -610,6 +635,7 @@ main() {
     sync_configurations
     install_extensions
     install_themes
+    install_libadwaita_override
     apply_configurations
     show_completion
 }
